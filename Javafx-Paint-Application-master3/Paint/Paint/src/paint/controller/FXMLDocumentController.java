@@ -31,7 +31,7 @@ import paint.model.*;
 
 public class FXMLDocumentController implements Initializable, DrawingEngine {
   
-    /***FXML VARIABLES***/
+    /**FXML VARIABLES**/
     @FXML
     private Button DeleteBtn;
     @FXML
@@ -75,7 +75,7 @@ public class FXMLDocumentController implements Initializable, DrawingEngine {
     @FXML
     private ListView ShapeList;
     
-    /***CLASS VARIABLES***/
+    /**CLASS VARIABLES**/
     private Point2D start;
     private Point2D end;
     
@@ -101,9 +101,6 @@ public class FXMLDocumentController implements Initializable, DrawingEngine {
         if(event.getSource()==DeleteBtn){
     if(!ShapeList.getSelectionModel().isEmpty()){
         int index = ShapeList.getSelectionModel().getSelectedIndex();
-        // CHANGE: Instead of using a static ArrayList<Shape>, 
-       // now shapes are managed through ApplicationStateManager (Singleton).
-
         ArrayList<Shape> shapeList = ApplicationStateManager.getInstance().getShapes();
         ApplicationStateManager.getInstance().removeShape(shapeList.get(index));
         refresh(CanvasBox);
@@ -112,16 +109,20 @@ public class FXMLDocumentController implements Initializable, DrawingEngine {
     }
 }
         
-        if(event.getSource()==RecolorBtn){
-            if(!ShapeList.getSelectionModel().isEmpty()){
-                int index = ShapeList.getSelectionModel().getSelectedIndex();
-                ArrayList<Shape> shapeList = ApplicationStateManager.getInstance().getShapes();
-                shapeList.get(index).setFillColor(ColorBox.getValue());
-                refresh(CanvasBox);
-            }else{
-                Message.setText("You need to pick a shape first to recolor it.");
-            }
-        }
+        if(event.getSource() == RecolorBtn){
+        if(!ShapeList.getSelectionModel().isEmpty()){
+        int index = ShapeList.getSelectionModel().getSelectedIndex();
+        ArrayList<Shape> shapeList = ApplicationStateManager.getInstance().getShapes();
+        
+        Color c = ApplicationStateManager.getInstance().getCurrentColor();
+        shapeList.get(index).setFillColor(c);
+
+        refresh(CanvasBox);
+    } else {
+        Message.setText("You need to pick a shape first to recolor it.");
+    }
+}
+
         
         if(event.getSource()==MoveBtn){
             if(!ShapeList.getSelectionModel().isEmpty()){
@@ -209,8 +210,7 @@ public class FXMLDocumentController implements Initializable, DrawingEngine {
         else if(copy){copy=false;copyFunction();}
         else if(resize){resize=false;resizeFunction();}
     }
-    // CHANGE: Shape removal and other proceses is now delegated to ApplicationStateManager 
-// instead of modifying shapeList directly.
+    
     public void moveFunction(){
         int index = ShapeList.getSelectionModel().getSelectedIndex();
         ArrayList<Shape> shapeList = ApplicationStateManager.getInstance().getShapes();
@@ -221,39 +221,45 @@ public class FXMLDocumentController implements Initializable, DrawingEngine {
     public void copyFunction() throws CloneNotSupportedException{
     int index = ShapeList.getSelectionModel().getSelectedIndex();
     ArrayList<Shape> shapeList = ApplicationStateManager.getInstance().getShapes();
-    //
     Shape temp = shapeList.get(index).makeCopy();
     if(temp == null){
         System.out.println("Error cloning failed!");
     } else {
-        // CHANGE: When undo/redo or load, shapes are updated through 
-        // ApplicationStateManager instead of direct assignment.
         ApplicationStateManager.getInstance().addShape(temp);
         shapeList.get(shapeList.size()-1).setTopLeft(start);
         refresh(CanvasBox);
     }
 }
     
-    public void resizeFunction(){
-        int index = ShapeList.getSelectionModel().getSelectedIndex();
-        ArrayList<Shape> shapeList = ApplicationStateManager.getInstance().getShapes();
-        Color c = shapeList.get(index).getFillColor();
-        start = shapeList.get(index).getTopLeft();
-        //Factory DP
-        Shape temp = new ShapeFactory().createShape(shapeList.get(index).getClass().getSimpleName(),start,end,ColorBox.getValue());
-        if(temp.getClass().getSimpleName().equals("Line")){Message.setText("Line doesn't support this command. Sorry :(");return;}
-        ApplicationStateManager.getInstance().removeShape(shapeList.get(index));
-        temp.setFillColor(c);
-        ApplicationStateManager.getInstance().addShape(temp);
-        refresh(CanvasBox);
+    public void resizeFunction() {
+    int index = ShapeList.getSelectionModel().getSelectedIndex();
+    ArrayList<Shape> shapeList = ApplicationStateManager.getInstance().getShapes();
+    Color currentColor = ApplicationStateManager.getInstance().getCurrentColor();
+    
+    start = shapeList.get(index).getTopLeft();
+    Shape temp = new ShapeFactory().createShape(
+        shapeList.get(index).getClass().getSimpleName(),
+        start, end, currentColor
+    );
+    
+    if (temp.getClass().getSimpleName().equals("Line")) {
+        Message.setText("Line doesn't support this command. Sorry :(");
+        return;
     }
+    ApplicationStateManager.getInstance().removeShape(shapeList.get(index));
+    ApplicationStateManager.getInstance().addShape(temp);
+    refresh(CanvasBox);
+}
+
     
     public void dragFunction(){
         String type = ShapeBox.getValue();
         Shape sh;
         //Factory DP
         try{
-            sh = new ShapeFactory().createShape(type,start,end,ColorBox.getValue());
+            Color c = ApplicationStateManager.getInstance().getCurrentColor();
+            sh = new ShapeFactory().createShape(type, start, end, c);
+
         }catch(Exception e){
             Message.setText("Don't be in a hurry! Choose a shape first :'D");
             return;
@@ -285,17 +291,24 @@ public class FXMLDocumentController implements Initializable, DrawingEngine {
     
     @Override
     public void initialize(URL url, ResourceBundle rb) {
-        ObservableList<String> shapeList = FXCollections.observableArrayList();
-        shapeList.add("Circle");
-        shapeList.add("Ellipse");
-        shapeList.add("Rectangle");
-        shapeList.add("Square");
-        shapeList.add("Triangle");
-        shapeList.add("Line");
-        ShapeBox.setItems(shapeList);
         
-        ColorBox.setValue(Color.BLACK);
-    }
+    ColorBox.setValue(Color.BLACK);
+    ApplicationStateManager.getInstance().setCurrentColor(Color.BLACK);
+    
+    ColorBox.setOnAction(e -> {
+        ApplicationStateManager.getInstance().setCurrentColor(ColorBox.getValue());
+    });
+    
+    ObservableList<String> shapeList = FXCollections.observableArrayList();
+    shapeList.add("Circle");
+    shapeList.add("Ellipse");
+    shapeList.add("Rectangle");
+    shapeList.add("Square");
+    shapeList.add("Triangle");
+    shapeList.add("Line");
+    ShapeBox.setItems(shapeList);
+}
+
 
     @Override
     public void refresh(Object canvas) {
